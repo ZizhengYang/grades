@@ -1,90 +1,155 @@
 import re
 import numpy as np
-# import ase.io.cube
-# from westpy import VData
-# from westpy import Angstrom
-import const
 
-def parse_file_cube_atoms(path):
-    f = open(path, "r")
-    lines = f.readlines()
-    line_atom = lines[2]
-    atom_num = int(remove_space_keep_num(line_atom)[0])
-    atoms_info = []
-    for i in range(atom_num):
-        atom_info = remove_space_keep_num(lines[i+6])
-        # print(remove_space_keep_num(lines[i+6]))
-        atom_info[0] = float(atom_info[0])
-        atom_info[1] = const.atom_number[atom_info[0]]
-        for j in range(2, 5):
-            atom_info[j] = float(atom_info[j])
-        # print(atom_info)
-        atoms_info.append(atom_info)
-    return atom_num, atoms_info
+from const import dict_atom_number
 
+# Class ParseCube():
+class ParseCube:
+    def __init__(self, file_path):
+        """
+        Initialize the ParseCube object with the path to the Gaussian Cube file.
 
-def parse_file_cube(path):
-    f = open(path, "r")
-    lines = f.readlines()
-    line_atom = lines[2]
-    atom_num = int(remove_space_keep_num(line_atom)[0])
-    line_x = lines[3]
-    line_y = lines[4]
-    line_z = lines[5]
-    param_x = remove_space_keep_num(line_x)
-    param_y = remove_space_keep_num(line_y)
-    param_z = remove_space_keep_num(line_z)
-    nx = int(param_x[0])
-    ny = int(param_y[0])
-    nz = int(param_z[0])
-    dx = float(param_x[1])
-    dy = float(param_y[2])
-    dz = float(param_z[3])
-    data = []
-    for i in range(atom_num+6, len(lines)):
-        data_i = remove_space_keep_num(lines[i])
-        for data_ij in data_i:
-            data.append(float(data_ij))
-    data_x = []
-    count = 0
-    for x in range(nx):
-        data_y = []
-        for y in range(ny):
-            data_z = []
-            for z in range(nz):
-                data_z.append(data[count])
-                count += 1
-            data_y.append(data_z)
-        data_x.append(data_y)
-    angstrom = const.angstrom
-    return data_x, [dx/angstrom, dy/angstrom, dz/angstrom], [nx, ny, nz]
+        Parameters:
+        - file_path (str): Path to the Gaussian Cube file.
+        """
+        self.file_path = file_path
+        self.lines = []
+        self.num_atoms = 0
+        self.sampling_matrix = None
+        self.sampling_step = []
+        self.origin = (0.0, 0.0, 0.0)
+        self.atom_coordinates = {}
+        self.volume_data = []
+        
+    def remove_space_keep_num(self, in_str):
+        str_params = re.split(r"[;,\s]\s*", in_str)
+        ret_array = []
+        for str_param in str_params:
+            if not str_param == '':
+                ret_array.append(str_param)
+        return ret_array
 
+    def read_cube_file(self):
+        """
+        Read the Gaussian Cube file and extract relevant information.
 
-def remove_space_keep_num(in_str):
-    str_params = re.split(r"[;,\s]\s*", in_str)
-    ret_array = []
-    for str_param in str_params:
-        if not str_param == '':
-            ret_array.append(str_param)
-    return ret_array
+        This function reads the header information, atomic coordinates, and volume data.
+        """
+        with open(self.file_path, 'r') as cube_file:
+            self.lines = cube_file.readlines()
+            self.read_atom_numbers(cube_file)
+            
+            # Read and parse header information
+            self.read_header_sampling_steps(cube_file)
 
+            # Read atomic coordinates
+            self.read_atom_coordinates(cube_file)
 
-# my_data, dd, nn = parse_file_cube("./wfc/nvcenter/spindown124.cube")
-# west_data, _ = ase.io.cube.read_cube_data("./wfc/nvcenter/spindown124.cube")
-# print(np.array(my_data).shape)
-# print(np.array(west_data).shape)
-# vdata = VData("./wfc/nvcenter/spindown124.cube", normalize='sqrt')
-# print(np.array(my_data[0][0]))
-# print(np.array(west_data[0][0]))
-# print((my_data == west_data)[0][0])
-# print(vdata.data == west_data)
-# print(Angstrom)
-# print(angstrom)
-# print(vdata.dx)
-# print(vdata.cell.R[(0,0)])
-# print(dd)
-# print(nn)
+            # Read volume data
+            # self.read_volume_data(cube_file)
+            
+    def read_atom_numbers(self, cube_file):
+        """
+        Reads the number of atoms from a Gaussian Cube file.
 
-# atom_num, atoms_info = parse_file_cube_atoms("./wfc/nvcenter/spindown124.cube")
-# print(atom_num)
-# print(atoms_info)
+        Parameters:
+        - cube_file (file): A file object representing the Gaussian Cube file.
+        - self.num_atoms (int): Number of atoms in the molecular structure.
+        """
+        self.num_atoms = int(self.remove_space_keep_num(self.lines[2])[0])
+
+    def read_header_sampling_steps(self, cube_file):
+        """
+        Read the header information from the Gaussian Cube file.
+
+        Parameters:
+        - cube_file (file): Open file object for the Gaussian Cube file.
+        """
+        # Read the number of atoms and volume dimensions
+        param_x = self.remove_space_keep_num(self.lines[3])
+        param_y = self.remove_space_keep_num(self.lines[4])
+        param_z = self.remove_space_keep_num(self.lines[5])
+        
+        self.sampling_matrix = np.array([
+            [float(param_x[1]), float(param_x[2]), float(param_x[3])],
+            [float(param_y[1]), float(param_y[2]), float(param_y[3])],
+            [float(param_z[1]), float(param_z[2]), float(param_z[3])]
+        ])
+        
+        self.sampling_step.append(float(param_x[1]))
+        self.sampling_step.append(float(param_y[2]))
+        self.sampling_step.append(float(param_z[3]))
+
+        # Read the origin
+        # self.origin = tuple(map(float, cube_file.readline().split()[1:4]))
+
+    def read_atom_coordinates(self, cube_file):
+        """
+        Read atomic coordinates from the Gaussian Cube file.
+
+        Parameters:
+        - cube_file (file): Open file object for the Gaussian Cube file.
+        """
+        # for _ in range(self.num_atoms):
+        #     atom_info = tuple(map(float, cube_file.readline().split()[2:5]))
+        #     self.atom_coordinates.append(atom_info)
+        for i in range(6, self.num_atoms+6):
+            element = dict_atom_number[int(self.remove_space_keep_num(self.lines[i])[0])]
+            position = [float(pos) for pos in self.remove_space_keep_num(self.lines[i])[2:]]
+            self.atom_coordinates[f'{element}{i-6}'] = position
+            
+    def find_system_origin(self):
+        return 0
+
+    def read_volume_data(self, cube_file):
+        """
+        Read volume data from the Gaussian Cube file.
+
+        Parameters:
+        - cube_file (file): Open file object for the Gaussian Cube file.
+        """
+        for i in range(self.num_atoms+6, len(self.lines)):
+            data_i = self.remove_space_keep_num(self.lines[i])
+            for data_ij in data_i:
+                print(data_ij)
+
+    def get_num_atoms(self):
+        """
+        Get the number of atoms in the Gaussian Cube file.
+
+        Returns:
+        - int: Number of atoms.
+        """
+        return self.num_atoms
+
+    def get_sampling_step(self):
+        """
+        Get the dimensions of the volume grid in the Gaussian Cube file.
+
+        Returns:
+        - tuple: (nx, ny, nz), representing the number of grid points in each dimension.
+        """
+        return self.sampling_step
+
+    def get_origin(self):
+        """
+        Get the origin coordinates of the volume grid in the Gaussian Cube file.
+
+        Returns:
+        - tuple: (ox, oy, oz), representing the origin coordinates.
+        """
+        return self.origin
+    
+    
+
+cube_parser = ParseCube("./wfc/nvcenter/spindown124.cube")
+cube_parser.read_cube_file()
+
+num_atoms = cube_parser.get_num_atoms()
+sampling_step = cube_parser.get_sampling_step()
+origin = cube_parser.get_origin()
+
+print("Number of Atoms:", num_atoms)
+print("Volume Dimensions:", sampling_step)
+# print("Atom Positions:", cube_parser.atom_coordinates)
+print("Origin:", origin)
