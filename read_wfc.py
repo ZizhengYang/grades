@@ -1,7 +1,7 @@
 import re
 import numpy as np
 
-from const import dict_atom_number
+from grades.const import dict_atom_number
 
 class ParseCube:
     def __init__(self, file_path):
