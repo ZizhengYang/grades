@@ -3,7 +3,6 @@ import numpy as np
 
 from const import dict_atom_number
 
-# Class ParseCube():
 class ParseCube:
     def __init__(self, file_path):
         """
