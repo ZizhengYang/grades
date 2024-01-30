@@ -5,7 +5,6 @@ import util
 
 class Structure():
     def __init__(self, file_path):
-        self.file_path = file_path
         self.num_atoms = 0
         self.sampling_matrix = None
         self.sampling_step = []
@@ -25,7 +24,7 @@ class Wavefunction():
         self.atom_coordinates = {}
         self.volume_data = []
         
-    def parse_cube_file(self):
+    def parse_cube(self):
         with open(self.file_path, 'r') as cube_file:
             self._lines = cube_file.readlines()
             self.read_atom_numbers(cube_file)
@@ -49,3 +48,27 @@ class Wavefunction():
         self.sampling_step.append(float(param_x[1]))
         self.sampling_step.append(float(param_y[2]))
         self.sampling_step.append(float(param_z[3]))
+        
+    def read_atom_coordinates(self, cube_file):
+        for i in range(6, self.num_atoms+6):
+            element = dict_atom_number[int(util.remove_space_keep_num(self._lines[i])[0])]
+            position = [float(pos) for pos in util.remove_space_keep_num(self._lines[i])[2:]]
+            self.atom_coordinates[f'{element}{i-6}'] = position
+            
+    def find_system_origin(self):
+        return 0
+
+    def read_volume_data(self, cube_file):
+        for i in range(self.num_atoms+6, len(self._lines)):
+            data_i = util.remove_space_keep_num(self._lines[i])
+            for data_ij in data_i:
+                print(data_ij)
+
+    def get_num_atoms(self):
+        return self.num_atoms
+
+    def get_sampling_step(self):
+        return self.sampling_step
+
+    def get_origin(self):
+        return self.origin
